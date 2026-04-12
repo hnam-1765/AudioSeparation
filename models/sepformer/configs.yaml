@@ -7,7 +7,7 @@ config:
             mixture: "train/tr_mix.scp"
             spk1: "train/tr_s1.scp"
             spk2: "train/tr_s2.scp"
-            dynamic_mixing: false
+            dynamic_mixing: true
         valid:
             mixture: "valid/cv_mix.scp"
             spk1: "valid/cv_s1.scp"
@@ -34,7 +34,7 @@ config:
         module_feature_projector:
             num_channels: *var_model_audio_enc_out_channels 
             in_channels: *var_model_audio_enc_out_channels
-            out_channels: &feature_projector_out_channels 128 # F
+            out_channels: &feature_projector_out_channels 256 # F
             kernel_size: 1
             bias: false
         module_separator:
@@ -48,11 +48,11 @@ config:
                 global_blocks:
                     in_channels: *feature_projector_out_channels
                     num_mha_heads: 8
-                    dropout_rate: 0.05
+                    dropout_rate: 0.1
                 local_blocks:
                     in_channels: *feature_projector_out_channels
                     kernel_size: 65
-                    dropout_rate: 0.05
+                    dropout_rate: 0.1
                 down_conv_layer:
                     in_channels: *feature_projector_out_channels
                     samp_kernel_size: &var_model_samp_kernel_size 5
@@ -66,15 +66,15 @@ config:
                 global_blocks:
                     in_channels: *feature_projector_out_channels
                     num_mha_heads: 8
-                    dropout_rate: 0.05
+                    dropout_rate: 0.1
                 local_blocks:
                     in_channels: *feature_projector_out_channels
                     kernel_size: 65
-                    dropout_rate: 0.05
+                    dropout_rate: 0.1
                 spk_attention:
                     in_channels: *feature_projector_out_channels
                     num_mha_heads: 8
-                    dropout_rate: 0.05
+                    dropout_rate: 0.1
         module_output_layer:
             in_channels: *var_model_audio_enc_out_channels
             out_channels: *feature_projector_out_channels
@@ -106,7 +106,7 @@ config:
     optimizer: ### Ref: https://pytorch.org/docs/stable/optim.html#algorithms
         name: ["AdamW"] ### Choose a torch.optim's class(=attribute) e.g. ["Adam", "AdamW", "SGD", ...] / You can also build your optimizer :)
         AdamW:
-            lr: 1.0e-3
+            lr: 2.0e-4
             weight_decay: 1.0e-2
     scheduler: ### Ref(+ find "How to adjust learning rate"): https://pytorch.org/docs/stable/optim.html#algorithms
         name: ["ReduceLROnPlateau", "WarmupConstantSchedule"] ### Choose a torch.optim.lr_scheduler's class(=attribute) e.g. ["StepLR", "ReduceLROnPlateau", "Custom"] / You can also build your scheduler :)
@@ -125,4 +125,4 @@ config:
         mvn: false
         clip_norm: 5
         start_scheduling: 50
-        test_epochs: [100, 120, 150, 170]
+        test_epochs: [50, 80, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 199]

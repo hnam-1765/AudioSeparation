@@ -92,6 +92,7 @@ class MyDataset(Dataset):
         self.fs = fs
         self.dynamic_mixing = dynamic_mixing
         self.speed_list = speed_list or [0.9, 1.0, 1.1]
+        self._warned_dynamic_mixing_fallback = False
 
         for wave_scp_src in wave_scp_srcs:
             if not os.path.exists(wave_scp_src):
@@ -111,15 +112,42 @@ class MyDataset(Dataset):
         return key in self.wave_dict_mix
 
     def _dynamic_mixing(self, key):
+        def _supports_dynamic_key_format(value):
+            parts = value.split("_")
+            return len(parts) >= 4
+
         def _match_length(wav_data, len_data):
             leftover = len(wav_data) - len_data
             idx = random.randint(0, leftover)
             return wav_data[idx : idx + len_data]
 
+        # The original SepReformer dynamic mixing assumes WSJ/WHAM-style keys
+        # with enough "_" fields to identify speaker ids. MiniLibriMix keys do
+        # not follow that format, so fall back to direct loading instead of
+        # crashing inside worker processes.
+        if not _supports_dynamic_key_format(key):
+            if not self._warned_dynamic_mixing_fallback:
+                logger.warning(
+                    "Dynamic mixing fallback: key format '%s' is incompatible with "
+                    "SepReformer WSJ-style parsing. Using direct load instead.",
+                    key,
+                )
+                self._warned_dynamic_mixing_fallback = True
+            return self._direct_load(key)
+
         samps_src = []
         src_len = []
         while True:
             key_random = random.choice(list(self.wave_dict_srcs[0].keys()))
+            if not _supports_dynamic_key_format(key_random):
+                if not self._warned_dynamic_mixing_fallback:
+                    logger.warning(
+                        "Dynamic mixing fallback: random key format '%s' is incompatible "
+                        "with SepReformer WSJ-style parsing. Using direct load instead.",
+                        key_random,
+                    )
+                    self._warned_dynamic_mixing_fallback = True
+                return self._direct_load(key)
             tmp1 = key.split("_")[1][:3] != key_random.split("_")[3][:3]
             tmp2 = key.split("_")[3][:3] != key_random.split("_")[1][:3]
             if tmp1 and tmp2:
