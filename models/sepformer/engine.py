@@ -149,6 +149,7 @@ class Engine(object):
         tot_loss_freq = [0.0] * self.model.num_stages
         tot_loss_time, num_batch = 0.0, 0
         tot_si_sdr = 0.0; tot_sdr = 0.0; tot_si_snr = 0.0; tot_snr = 0.0
+        tot_pesq = 0.0; tot_stoi = 0.0
         n_samples = 0
 
         pbar = tqdm(total=len(dataloader),
@@ -182,23 +183,33 @@ class Engine(object):
                     t_len = int(lens[b])
                     # Speaker 1
                     e1 = estim_src[0][b, :t_len].float()
-                    r1 = src[0][b, :t_len].float()
+                    r1 = src[0][b, :t_len].float().to(e1.device)
                     e2 = estim_src[1][b, :t_len].float()
-                    r2 = src[1][b, :t_len].float()
+                    r2 = src[1][b, :t_len].float().to(e2.device)
 
                     s1 = sisdr(e1, r1).item() + sisdr(e2, r2).item()
                     s2 = sdr_metric(e1, r1).item() + sdr_metric(e2, r2).item()
                     s3 = sisnr(e1, r1).item() + sisnr(e2, r2).item()
                     s4 = snr_metric(e1, r1).item() + snr_metric(e2, r2).item()
+                    e1_np = e1.detach().cpu().numpy()
+                    r1_np = r1.detach().cpu().numpy()
+                    e2_np = e2.detach().cpu().numpy()
+                    r2_np = r2.detach().cpu().numpy()
+                    s5 = pesq(r1_np, e1_np) + pesq(r2_np, e2_np)
+                    s6 = stoi(r1_np, e1_np) + stoi(r2_np, e2_np)
                     tot_si_sdr += s1 / 2
                     tot_sdr    += s2 / 2
                     tot_si_snr += s3 / 2
                     tot_snr    += s4 / 2
+                    tot_pesq   += s5 / 2
+                    tot_stoi   += s6 / 2
                     n_samples  += 1
 
                 dict_loss = {"T_Loss": tot_loss_time / num_batch,
                              "SI-SDR": tot_si_sdr / n_samples,
-                             "SDR":    tot_sdr    / n_samples}
+                             "SDR":    tot_sdr    / n_samples,
+                             "PESQ":   tot_pesq   / n_samples,
+                             "STOI":   tot_stoi   / n_samples}
                 pbar.set_postfix(dict_loss)
         pbar.close()
         tot_loss_freq = sum(tot_loss_freq) / len(tot_loss_freq)
@@ -210,6 +221,8 @@ class Engine(object):
             "sdr":       tot_sdr    / n_samples,
             "si_snr":    tot_si_snr / n_samples,
             "snr":       tot_snr    / n_samples,
+            "pesq":      tot_pesq   / n_samples,
+            "stoi":      tot_stoi   / n_samples,
         }
         return metrics, num_batch
 
