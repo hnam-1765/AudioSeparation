@@ -5,14 +5,7 @@ Production-oriented refactor of a small research codebase for single-channel spe
 - `SepFormer`-style encoder-separator-decoder pipeline
 - `MossFormer2`-style dual-path transformer pipeline
 
-The repository is still lightweight and research-friendly, but the runtime layout is now cleaner for local experiments, sharing, and publishing on GitHub:
-
-- no hardcoded absolute dataset or output paths
-- centralized runtime path handling
-- generated SCP manifests for SepFormer under a managed artifact directory
-- clearer training/inference entry points
-- fewer fragile `sys.path` hacks
-- improved README and dependency story
+ 
 
 ## What This Repo Does
 
