@@ -1,0 +1,16 @@
+numpy
+pandas
+pyyaml
+scipy
+torch
+tqdm
+loguru
+tensorboard
+
+# Optional integrations
+wandb
+pesq
+pystoi
+torchinfo
+ptflops
+thop
