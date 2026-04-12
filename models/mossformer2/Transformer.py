@@ -110,7 +110,7 @@ class FLASH_ShareA_FFConvM(nn.Module):
         b, n, device, g = x.shape[0], x.shape[-2], x.device, self.group_size
 
         if exists(mask):
-            lin_mask = mask.unsqueeze(-1)
+            lin_mask = rearrange(mask, '... -> ... 1')
             lin_k = lin_k.masked_fill(~lin_mask, 0.)
 
         # Rotate with rotary embeddings
@@ -126,8 +126,8 @@ class FLASH_ShareA_FFConvM(nn.Module):
             quad_q, quad_k, lin_q, lin_k, v, u = map(
                 lambda t: F.pad(t, pad_tuple, value=0.),
                 (quad_q, quad_k, lin_q, lin_k, v, u))
-            if exists(mask):
-                mask = F.pad(mask, (0, padding), value=True)
+            mask = default(mask, torch.ones((b, n), device=device, dtype=torch.bool))
+            mask = F.pad(mask, (0, padding), value=False)
 
         # Group sequence into chunks of group_size
         quad_q, quad_k, lin_q, lin_k, v, u = map(
@@ -138,7 +138,7 @@ class FLASH_ShareA_FFConvM(nn.Module):
             mask = rearrange(mask, 'b (g j) -> b g 1 j', j=g)
 
         # ── Quadratic attention ──
-        sim = einsum('... i d, ... j d -> ... i j', quad_q, quad_k) / math.sqrt(g)
+        sim = einsum('... i d, ... j d -> ... i j', quad_q, quad_k) / g
         attn = F.relu(sim) ** 2
         attn = self.dropout(attn)
         if exists(mask):
@@ -275,7 +275,7 @@ class Gated_FSMN_Block_Dilated(nn.Module):
 class FLASHTransformer_DualA_FSMN(nn.Module):
     def __init__(self, dim, depth, group_size=256, query_key_dim=128,
                  expansion_factor=4., causal=False, attn_dropout=0.1,
-                 norm_type='layernorm', shift_tokens=True):
+                 norm_type='scalenorm', shift_tokens=True):
         super().__init__()
         assert norm_type in ('scalenorm', 'layernorm')
         norm_klass = ScaleNorm if norm_type == 'scalenorm' else nn.LayerNorm
@@ -285,7 +285,7 @@ class FLASHTransformer_DualA_FSMN(nn.Module):
             if HAS_ROTARY else None
 
         self.fsmn = nn.ModuleList([
-            Gated_FSMN_Block_Dilated(dim, dim, norm_type=norm_type)
+            Gated_FSMN_Block_Dilated(dim, norm_type=norm_type)
             for _ in range(depth)])
 
         self.layers = nn.ModuleList([
@@ -312,12 +312,7 @@ class TransformerEncoder_FLASH_DualA_FSMN(nn.Module):
                  activation=nn.ReLU, normalize_before=False,
                  causal=False, attention_type="regularMHA"):
         super().__init__()
-        act_cls = nn.ReLU if activation == "relu" else nn.GELU
-        self.flashT = FLASHTransformer_DualA_FSMN(
-            dim=d_model, depth=num_layers,
-            query_key_dim=d_model // 2,
-            expansion_factor=4., attn_dropout=dropout,
-            norm_type='layernorm', shift_tokens=True)
+        self.flashT = FLASHTransformer_DualA_FSMN(dim=d_model, depth=num_layers)
         self.norm = LayerNorm(d_model, eps=1e-6)
 
     def forward(self, src, src_mask=None, src_key_padding_mask=None, pos_embs=None):

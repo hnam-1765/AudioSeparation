@@ -76,7 +76,7 @@ class DilatedDenseNet(nn.Module):
             out = getattr(self, f'norm{i + 1}')(out)
             out = getattr(self, f'prelu{i + 1}')(out)
             skip = torch.cat([out, skip], dim=1)
-        return skip
+        return out
 
 
 class UniDeepFsmn_dilated(nn.Module):
