@@ -1,6 +1,10 @@
+# ⚠️  DEPRECATED — this file is kept for backwards compatibility only.
+# Use configs/sepformer.yaml (large) or configs/sepformer_base.yaml (base) instead.
+# See also: README.md § "Known Limitations".
+
 config:
     dataset:
-        max_len : 32000
+        max_len: 32000
         sampling_rate: 8000
         scp_dir: null
         train:
@@ -22,19 +26,19 @@ config:
         num_workers: 12
         drop_last: false
     model:
-        num_stages: &var_model_num_stages 4 # R
+        num_stages: &var_model_num_stages 4
         num_spks: &var_model_num_spks 2
         module_audio_enc:
             in_channels: 1
             out_channels: &var_model_audio_enc_out_channels 256
-            kernel_size: &var_model_audio_enc_kernel_size 16 # L
-            stride: &var_model_audio_enc_stride 4 # S
+            kernel_size: &var_model_audio_enc_kernel_size 16
+            stride: &var_model_audio_enc_stride 4
             groups: 1
             bias: false
         module_feature_projector:
-            num_channels: *var_model_audio_enc_out_channels 
+            num_channels: *var_model_audio_enc_out_channels
             in_channels: *var_model_audio_enc_out_channels
-            out_channels: &feature_projector_out_channels 256 # F
+            out_channels: &feature_projector_out_channels 256
             kernel_size: 1
             bias: false
         module_separator:
@@ -85,12 +89,12 @@ config:
             kernel_size: *var_model_audio_enc_kernel_size
             stride: *var_model_audio_enc_stride
             bias: false
-    criterion: ### Ref: https://pytorch.org/docs/stable/nn.html#loss-functions
-        name: ["PIT_SISNR_mag", "PIT_SISNR_time", "PIT_SISNRi", "PIT_SDRi"] ### Choose a torch.nn's loss function class(=attribute) e.g. ["L1Loss", "MSELoss", "CrossEntropyLoss", ...] / You can also build your optimizer :)
+    criterion:
+        name: ["PIT_SISNR_mag", "PIT_SISNR_time", "PIT_SISNRi", "PIT_SDRi"]
         PIT_SISNR_mag:
             frame_length: 512
             frame_shift: 128
-            window: 'hann'
+            window: "hann"
             num_stages: *var_model_num_stages
             num_spks: *var_model_num_spks
             scale_inv: true
@@ -103,13 +107,13 @@ config:
             scale_inv: true
         PIT_SDRi:
             dump: 0
-    optimizer: ### Ref: https://pytorch.org/docs/stable/optim.html#algorithms
-        name: ["AdamW"] ### Choose a torch.optim's class(=attribute) e.g. ["Adam", "AdamW", "SGD", ...] / You can also build your optimizer :)
+    optimizer:
+        name: ["AdamW"]
         AdamW:
             lr: 2.0e-4
             weight_decay: 1.0e-2
-    scheduler: ### Ref(+ find "How to adjust learning rate"): https://pytorch.org/docs/stable/optim.html#algorithms
-        name: ["ReduceLROnPlateau", "WarmupConstantSchedule"] ### Choose a torch.optim.lr_scheduler's class(=attribute) e.g. ["StepLR", "ReduceLROnPlateau", "Custom"] / You can also build your scheduler :)
+    scheduler:
+        name: ["ReduceLROnPlateau", "WarmupConstantSchedule"]
         ReduceLROnPlateau:
             mode: "min"
             min_lr: 1.0e-10
@@ -121,7 +125,7 @@ config:
         dummy_len: 16000
     engine:
         max_epoch: 200
-        gpuid: "0" ### "0"(single-gpu) or "0, 1" (multi-gpu)
+        gpuid: "0"
         mvn: false
         clip_norm: 5
         start_scheduling: 50

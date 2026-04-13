@@ -1,0 +1,143 @@
+# SepFormer Base config — for MiniLibriMix (pre-mixed dataset, no dynamic mixing)
+#
+# Key differences from sepformer.yaml (Large variant):
+#   - dynamic_mixing: false  (use pre-mixed mix_clean/ files)
+#   - feature_projector out_channels: 128 (vs 256 in Large → smaller model)
+#   - dropout: 0.05 (vs 0.1 in Large)
+#   - lr: 1.0e-3 (vs 2.0e-4 in Large)
+#   - max_epoch: 50  (MiniLibriMix is small, 800 train samples)
+#   - test_epochs: [50]  (test only at end of training)
+#   - batch_size: 4  (larger batch OK for smaller model)
+#
+# Usage:
+#   python train.py --model sepformer --sepformer_config base \
+#     --data_root /path/to/MiniLibriMix --epochs 50 --no_wandb
+
+config:
+  dataset:
+    max_len: 32000
+    sampling_rate: 8000
+    scp_dir: null
+    train:
+      mixture: "train/tr_mix.scp"
+      spk1: "train/tr_s1.scp"
+      spk2: "train/tr_s2.scp"
+      dynamic_mixing: false          # use pre-mixed files from MiniLibriMix
+    valid:
+      mixture: "valid/cv_mix.scp"
+      spk1: "valid/cv_s1.scp"
+      spk2: "valid/cv_s2.scp"
+    test:
+      mixture: "valid/cv_mix.scp"    # MiniLibriMix has no test/ split; reuse val
+      spk1: "valid/cv_s1.scp"
+      spk2: "valid/cv_s2.scp"
+  dataloader:
+    batch_size: 4
+    pin_memory: false
+    num_workers: 4
+    drop_last: false
+  model:
+    num_stages: &var_model_num_stages 4
+    num_spks: &var_model_num_spks 2
+    module_audio_enc:
+      in_channels: 1
+      out_channels: &var_model_audio_enc_out_channels 256
+      kernel_size: &var_model_audio_enc_kernel_size 16
+      stride: &var_model_audio_enc_stride 4
+      groups: 1
+      bias: false
+    module_feature_projector:
+      num_channels: *var_model_audio_enc_out_channels
+      in_channels: *var_model_audio_enc_out_channels
+      out_channels: &feature_projector_out_channels 128   # 128 (vs 256 in Large)
+      kernel_size: 1
+      bias: false
+    module_separator:
+      num_stages: *var_model_num_stages
+      relative_positional_encoding:
+        in_channels: *feature_projector_out_channels
+        num_heads: 8
+        maxlen: 2000
+        embed_v: false
+      enc_stage:
+        global_blocks:
+          in_channels: *feature_projector_out_channels
+          num_mha_heads: 8
+          dropout_rate: 0.05            # 0.05 (vs 0.1 in Large)
+        local_blocks:
+          in_channels: *feature_projector_out_channels
+          kernel_size: 65
+          dropout_rate: 0.05            # 0.05 (vs 0.1 in Large)
+        down_conv_layer:
+          in_channels: *feature_projector_out_channels
+          samp_kernel_size: &var_model_samp_kernel_size 5
+      spk_split_stage:
+        in_channels: *feature_projector_out_channels
+        num_spks: *var_model_num_spks
+      simple_fusion:
+        out_channels: *feature_projector_out_channels
+      dec_stage:
+        num_spks: *var_model_num_spks
+        global_blocks:
+          in_channels: *feature_projector_out_channels
+          num_mha_heads: 8
+          dropout_rate: 0.05            # 0.05 (vs 0.1 in Large)
+        local_blocks:
+          in_channels: *feature_projector_out_channels
+          kernel_size: 65
+          dropout_rate: 0.05            # 0.05 (vs 0.1 in Large)
+        spk_attention:
+          in_channels: *feature_projector_out_channels
+          num_mha_heads: 8
+          dropout_rate: 0.05            # 0.05 (vs 0.1 in Large)
+    module_output_layer:
+      in_channels: *var_model_audio_enc_out_channels
+      out_channels: *feature_projector_out_channels
+      num_spks: *var_model_num_spks
+    module_audio_dec:
+      in_channels: *var_model_audio_enc_out_channels
+      out_channels: 1
+      kernel_size: *var_model_audio_enc_kernel_size
+      stride: *var_model_audio_enc_stride
+      bias: false
+  criterion:
+    name: ["PIT_SISNR_mag", "PIT_SISNR_time", "PIT_SISNRi", "PIT_SDRi"]
+    PIT_SISNR_mag:
+      frame_length: 512
+      frame_shift: 128
+      window: "hann"
+      num_stages: *var_model_num_stages
+      num_spks: *var_model_num_spks
+      scale_inv: true
+      mel_opt: false
+    PIT_SISNR_time:
+      num_spks: *var_model_num_spks
+      scale_inv: true
+    PIT_SISNRi:
+      num_spks: *var_model_num_spks
+      scale_inv: true
+    PIT_SDRi:
+      dump: 0
+  optimizer:
+    name: ["AdamW"]
+    AdamW:
+      lr: 1.0e-3              # 1.0e-3 (vs 2.0e-4 in Large)
+      weight_decay: 1.0e-2
+  scheduler:
+    name: ["ReduceLROnPlateau", "WarmupConstantSchedule"]
+    ReduceLROnPlateau:
+      mode: "min"
+      min_lr: 1.0e-10
+      factor: 0.8
+      patience: 2
+    WarmupConstantSchedule:
+      warmup_steps: 1000
+  check_computations:
+    dummy_len: 16000
+  engine:
+    max_epoch: 50             # 50 (vs 200 in Large — MiniLibriMix is small)
+    gpuid: "0"
+    mvn: false
+    clip_norm: 5
+    start_scheduling: 50
+    test_epochs: [50]         # test only at final epoch

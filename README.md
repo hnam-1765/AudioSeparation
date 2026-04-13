@@ -1,56 +1,37 @@
-# Audio Separation
+# 🎧 Audio Source Separation
 
-Production-oriented refactor of a small research codebase for single-channel speech separation on **MiniLibriMix**, with two bundled model families:
+Train and evaluate **SepFormer** and **MossFormer2** for single-channel two-speaker speech separation on **MiniLibriMix** — offline-friendly, no internet required.
 
-- `SepFormer`-style encoder-separator-decoder pipeline
-- `MossFormer2`-style dual-path transformer pipeline
+---
 
- 
+## 🗂️ Repository Layout
 
-## What This Repo Does
-
-This repository trains and evaluates speech separation models on pre-mixed two-speaker MiniLibriMix audio. It provides:
-
-- `train.py` as the main entry point for both SepFormer and MossFormer2
-- `inference.py` for checkpoint-based waveform separation
-- dataset loaders for MiniLibriMix CSV metadata and SepFormer SCP manifests
-- basic experiment logging, checkpointing, TensorBoard, and optional Weights & Biases integration
-
-## Repository Layout
-
-```text
+```
 audio_separation/
-├── train.py
-├── inference.py
-├── engine.py
+├── train.py                  # Unified entry point (SepFormer + MossFormer2)
+├── inference.py              # Checkpoint-based separation
+├── engine.py                 # Shared inference engine
 ├── requirements.txt
-├── .gitignore
+├── LICENSE
 ├── configs/
-│   └── sepformer.yaml
+│   ├── sepformer.yaml        # SepFormer Large config
+│   └── sepformer_base.yaml   # SepFormer Base config  ← recommended for MiniLibriMix
 ├── datasets/
 │   ├── __init__.py
-│   └── minilibrimix.py
+│   └── minilibrimix.py       # MiniLibriMix loader
 ├── models/
-│   ├── mossformer2/
-│   │   ├── __init__.py
-│   │   ├── conv_module.py
-│   │   ├── fsmn.py
-│   │   ├── model.py
-│   │   ├── mossformer2.py
-│   │   ├── normalization.py
-│   │   └── Transformer.py
-│   └── sepformer/
-│       ├── configs.yaml
-│       ├── dataset.py
-│       ├── engine.py
+│   ├── __init__.py
+│   ├── mossformer2/          # MossFormer2 architecture
+│   └── sepformer/            # SepFormer architecture (encoder-separator-decoder)
+│       ├── configs.yaml      # ⚠️  Deprecated; use configs/ instead
+│       ├── dataset.py        # SCP manifest loader
+│       ├── engine.py         # Training engine
 │       ├── main.py
 │       ├── model.py
 │       └── modules/
-│           ├── __init__.py
-│           ├── module.py
-│           └── network.py
-├── sepformer_utils/
-│   ├── __init__.py
+│           ├── module.py     # Core building blocks
+│           └── network.py    # GCFN, CLA, EGA, attention layers
+├── sepformer_utils/          # SepFormer-specific training utilities
 │   ├── decorators.py
 │   ├── functions.py
 │   ├── util_dataset.py
@@ -58,100 +39,100 @@ audio_separation/
 │   ├── util_implement.py
 │   ├── util_system.py
 │   └── implements/
-│       ├── criterions.py
-│       ├── mir_eval_stub.py
+│       ├── criterions.py     # PIT loss variants
 │       ├── optimizers.py
 │       └── schedulers.py
 └── utils/
     ├── __init__.py
-    ├── audio.py
-    ├── config.py
+    ├── audio.py              # WAV load/save helpers
+    ├── config.py             # YAML config helpers
     ├── losses.py
-    ├── manifests.py
-    ├── metrics.py
+    ├── manifests.py          # SCP manifest generation for MiniLibriMix
+    ├── metrics.py            # SI-SDR, SDR, PESQ, STOI
     ├── project.py
     └── train_utils.py
 ```
 
-## Dataset Layout
+---
 
-The code expects a MiniLibriMix directory with CSV metadata and audio files similar to:
+## ⚙️ Configurations
 
-```text
+### SepFormer Base (`configs/sepformer_base.yaml`) — Recommended for MiniLibriMix
+
+Lightweight variant tuned for the small MiniLibriMix dataset (800 train / 200 val samples).
+
+| Parameter | Value |
+|---|---|
+| `dynamic_mixing` | `false` (uses pre-mixed files) |
+| Feature dim (F) | **128** |
+| Dropout | **0.05** |
+| Learning rate | **1e-3** |
+| Batch size | **16** |
+| Max epochs | **50** |
+| Test at epoch | 50 only |
+
+### SepFormer Large (`configs/sepformer.yaml`)
+
+Full-size variant from the original SepFormer paper. Designed for WSJ-style datasets with dynamic on-the-fly mixing (`dynamic_mixing: true`).
+
+| Parameter | Value |
+|---|---|
+| `dynamic_mixing` | `true` |
+| Feature dim (F) | 256 |
+| Dropout | 0.1 |
+| Learning rate | 2e-4 |
+| Batch size | 2 |
+| Max epochs | 200 |
+
+---
+
+## 📦 Dataset
+
+### MiniLibriMix
+
+Download from [HuggingFace datasets](https://huggingface.co/datasets/minilibrimix) or [GitHub](https://github.com/JorisCosentino/LibriMix).
+
+```
 MiniLibriMix/
 ├── metadata/
 │   ├── mixture_train_mix_clean.csv
 │   ├── mixture_val_mix_clean.csv
 │   └── mixture_test_mix_clean.csv
-├── train/
-│   ├── mix_clean/
-│   ├── s1/
-│   └── s2/
-├── val/
-│   ├── mix_clean/
-│   ├── s1/
-│   └── s2/
-└── test/
-    ├── mix_clean/
-    ├── s1/
-    └── s2/
+├── train/  { mix_clean/, mix_both/, noise/, s1/, s2/ }
+└── val/    { mix_clean/, mix_both/, noise/, s1/, s2/ }
 ```
 
-Each CSV should contain at least:
+Each CSV has columns: `mixture_path`, `source_1_path`, `source_2_path`, `noise_path`, `length`.
+SCP manifests are generated automatically — no manual setup needed.
 
-- `mixture_path`
-- `source_1_path`
-- `source_2_path`
+---
 
-Paths may be relative to the dataset root, with or without a leading `MiniLibriMix/` prefix.
+## 🚀 Quick Start
 
-## Installation
-
-Create an environment and install the dependencies:
+### 1 — Install dependencies
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+# CPU only
+pip install numpy pandas scipy torch tqdm pyyaml
+
+# With full metrics (PESQ, STOI, Weights & Biases, TensorBoard)
 pip install -r requirements.txt
 ```
 
-If you do not need all optional metrics or logging integrations, you can install only the core packages:
+### 2 — Train SepFormer Base (recommended)
 
 ```bash
-pip install numpy pandas pyyaml scipy torch tqdm loguru tensorboard
+python train.py \
+  --model sepformer \
+  --sepformer_config base \
+  --data_root /path/to/MiniLibriMix \
+  --epochs 50 \
+  --batch_size 16 \
+  --gpu 0 \
+  --no_wandb
 ```
 
-## Configuration and Path Handling
-
-The repository resolves the dataset root in this order:
-
-1. `--data_root`
-2. `AUDIO_SEPARATION_DATA_ROOT`
-3. `./data/MiniLibriMix` relative to the repository root
-
-Runtime artifacts are written under:
-
-```text
-artifacts/<model_name>/<run_name>/
-```
-
-This includes:
-
-- checkpoints
-- TensorBoard logs
-- evaluation CSVs
-- separated waveform outputs
-- Weights & Biases metadata
-
-SepFormer SCP manifests are generated automatically under:
-
-```text
-artifacts/manifests/minilibrimix/
-```
-
-## Training
-
-### MossFormer2
+### 3 — Train MossFormer2
 
 ```bash
 python train.py \
@@ -160,127 +141,93 @@ python train.py \
   --epochs 50 \
   --batch_size 4 \
   --gpu 0 \
-  --run_name mossformer2-baseline
+  --no_wandb
 ```
 
-### SepFormer
-
-```bash
-python train.py \
-  --model sepformer \
-  --data_root /path/to/MiniLibriMix \
-  --epochs 50 \
-  --batch_size 2 \
-  --gpu 0 \
-  --run_name sepformer-baseline
-```
-
-### Optional Weights & Biases
-
-```bash
-python train.py \
-  --model mossformer2 \
-  --data_root /path/to/MiniLibriMix \
-  --wandb_project audio-separation \
-  --wandb_name mossformer2-exp1
-```
-
-Disable W&B explicitly:
-
-```bash
-python train.py --model mossformer2 --no_wandb
-```
-
-## Inference
-
-```bash
-python inference.py \
-  --model mossformer2 \
-  --input /path/to/mix.wav \
-  --checkpoint artifacts/mossformer2/mossformer2-baseline/checkpoints/best.pt \
-  --output_dir ./outputs
-```
-
-Or with SepFormer:
+### 4 — Inference
 
 ```bash
 python inference.py \
   --model sepformer \
   --input /path/to/mix.wav \
-  --checkpoint artifacts/sepformer/sepformer-baseline/checkpoints/epoch.0050.pth \
+  --checkpoint artifacts/sepformer/sepformer-base-bs16/checkpoints/best.pt \
   --output_dir ./outputs
 ```
 
-## Key CLI Arguments
+---
+
+## 📁 Outputs
+
+All artifacts are written under `artifacts/<model_name>/<run_name>/`:
+
+```
+artifacts/
+├── manifests/minilibrimix/   # auto-generated SCP files
+└── sepformer/
+    └── sepformer-base-bs16/
+        ├── checkpoints/      # best.pt, latest.pt, epoch.*.pth
+        ├── evaluation/        # test_metrics.csv
+        ├── logs/              # system_log.log
+        ├── outputs/           # separated wav files
+        └── tensorboard/
+```
+
+---
+
+## 🔧 Key CLI Arguments
 
 ### Shared
 
-- `--model`: `sepformer` or `mossformer2`
-- `--data_root`: dataset root
-- `--artifacts_root`: override artifact directory
-- `--run_name`: subdirectory name for outputs/checkpoints/logs
-- `--epochs`: number of training epochs
-- `--batch_size`: batch size
-- `--num_workers`: data loader workers
-- `--gpu`: GPU id string such as `0`
-- `--no_cuda`: force CPU
-- `--no_wandb`: disable W&B
+| Argument | Description | Default |
+|---|---|---|
+| `--model` | `sepformer` or `mossformer2` | `mossformer2` |
+| `--data_root` | Path to MiniLibriMix | — |
+| `--epochs` | Number of training epochs | 50 |
+| `--batch_size` | Batch size | 4 |
+| `--gpu` | GPU id (`0`, `1`, `0,1`) | `0` |
+| `--no_cuda` | Force CPU | — |
+| `--no_wandb` | Disable Weights & Biases | off |
+| `--wandb_project` | W&B project name | `audio-separation` |
+| `--run_name` | Subdirectory name | auto |
 
-### MossFormer2-specific runtime options
+### SepFormer only
 
-- `--mix_type`: `mix_clean` or `mix_both`
-- `--sample_rate`: audio sampling rate
-- `--max_len`: max waveform length in samples
-- `--preload_audio`: preload waveforms into memory
+| Argument | Description | Default |
+|---|---|---|
+| `--sepformer_config` | `base` (recommended) or `large` | `base` |
+| `--mix_type` | `mix_clean` or `mix_both` | `mix_clean` |
+| `--engine_mode` | `train` or mode containing `test` | `train` |
+| `--out_wav_dir` | Override test wav output dir | auto |
 
-### SepFormer-specific runtime options
+### MossFormer2 only
 
-- `--engine_mode`: `train` or a mode containing `test`
-- `--out_wav_dir`: override directory for test-time waveform dumps
+| Argument | Description | Default |
+|---|---|---|
+| `--mix_type` | `clean` or `both` | `clean` |
+| `--sample_rate` | Audio sample rate | 8000 |
+| `--max_len` | Max waveform samples | 80000 |
+| `--preload_audio` | Preload all audio to RAM | off |
+| `--lr` | Learning rate | 1e-3 |
 
-## Outputs
+---
 
-By default, a run such as:
+## 📊 Metrics
 
-```bash
-python train.py --model mossformer2 --run_name demo
-```
+Evaluation computes per-sample and aggregate:
 
-produces artifacts like:
+| Metric | Description |
+|---|---|
+| **SI-SDR** | Scale-Invariant Signal-to-Distortion Ratio |
+| **SDR** | Signal-to-Distortion Ratio |
+| **SI-SNR** | Scale-Invariant SNR |
+| **SNR** | Signal-to-Noise Ratio |
+| **PESQ** | Perceptual Evaluation of Speech Quality |
+| **STOI** | Short-Time Objective Intelligibility |
 
-```text
-artifacts/
-├── manifests/minilibrimix/
-└── mossformer2/demo/
-    ├── checkpoints/
-    ├── evaluation/
-    ├── logs/
-    ├── outputs/
-    ├── tensorboard/
-    └── wandb/
-```
+---
 
-## Notes on the Bundled SepFormer Code
+## ⚠️ Notes
 
-The SepFormer branch in this repository is adapted from an older research-style code layout. Some legacy files are still present, including `models/sepformer/configs.yaml`, but the main training flow now reads runtime configuration from:
-
-```text
-configs/sepformer.yaml
-```
-
-That keeps the public entry point cleaner while minimizing disruption to the original model implementation.
-
-## Known Limitations
-
-- This is still a research codebase, not a packaged PyPI project.
-- There are committed `__pycache__` files in the repository history that should be removed before a clean public release.
-- Metric coverage depends on optional packages such as `pesq` and `pystoi`.
-- SepFormer internals are still more complex and less uniform than the MossFormer2 path.
-
-## Suggested Next Cleanup Steps
-
-- remove tracked `__pycache__` and `.pyc` files from version control
-- consider moving `models/sepformer/configs.yaml` out of the tree or marking it deprecated
-- pin exact dependency versions once you settle on a training environment
-- add smoke tests for import, one-batch training, and inference
-- add sample experiment configs for reproducibility
+- `models/sepformer/configs.yaml` is **deprecated** — use `configs/sepformer.yaml` or `configs/sepformer_base.yaml`.
+- The codebase is offline-friendly: no pip installs from internet required during training on Kaggle or similar air-gapped environments.
+- The SepFormer code in `models/sepformer/` was adapted from a research-style layout; `train.py` is the clean public entry point.

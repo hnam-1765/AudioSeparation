@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 
+.git/
 .DS_Store
 .idea/
 .vscode/

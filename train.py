@@ -6,6 +6,7 @@ import argparse
 from itertools import permutations
 from types import SimpleNamespace
 
+import torch
 from tqdm import tqdm
 
 from datasets.minilibrimix import get_dataloaders
@@ -22,21 +23,31 @@ def train_sepformer(args):
     from models.sepformer import main as sepformer_main
 
     data_root = resolve_data_root(args.data_root)
+
+    sepformer_cfg_name = getattr(args, "sepformer_config", "base")
+    sepformer_yaml_map = {
+        "base": "sepformer_base.yaml",
+        "large": "sepformer.yaml",
+    }
+    sepformer_yaml = sepformer_yaml_map.get(sepformer_cfg_name, "sepformer_base.yaml")
+    run_name_suffix = f"-{sepformer_cfg_name}" if sepformer_cfg_name != "base" else ""
+
     paths = build_run_paths(
         model_name="sepformer",
         data_root=data_root,
         artifacts_root=args.artifacts_root,
-        run_name=args.run_name or f"sepformer-bs{args.batch_size}",
+        run_name=args.run_name or f"sepformer{run_name_suffix}-bs{args.batch_size}",
     ).create()
     create_minilibrimix_scp(data_root=data_root, scp_root=paths.manifests_dir, mix_type=args.mix_type)
 
     config = apply_sepformer_runtime_overrides(
-        raw_config=load_yaml_config(PROJECT_ROOT / "configs" / "sepformer.yaml"),
+        raw_config=load_yaml_config(PROJECT_ROOT / "configs" / sepformer_yaml),
         paths=paths,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         max_epoch=args.epochs,
         data_parallel_gpu_ids=args.gpu,
+        sepformer_config=sepformer_cfg_name,
     )
 
     sepformer_args = SimpleNamespace(
@@ -53,8 +64,6 @@ def train_sepformer(args):
 
 def train_mossformer2(args):
     """Train MossFormer2 on MiniLibriMix."""
-    import torch
-
     data_root = resolve_data_root(args.data_root)
     paths = build_run_paths(
         model_name="mossformer2",
@@ -296,6 +305,13 @@ def main():
     parser.add_argument("--wandb_name", type=str, default=None)
     parser.add_argument("--engine_mode", type=str, default="train")
     parser.add_argument("--out_wav_dir", type=str, default=None)
+    parser.add_argument(
+        "--sepformer_config",
+        type=str,
+        default="base",
+        choices=["base", "large"],
+        help="Which SepFormer config to use: 'base' (smaller, for MiniLibriMix) or 'large' (original).",
+    )
     args = parser.parse_args()
 
     if args.model == "sepformer":
