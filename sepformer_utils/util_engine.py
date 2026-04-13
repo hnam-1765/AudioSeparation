@@ -34,24 +34,30 @@ def load_last_checkpoint_n_get_epoch(checkpoint_dir, model, optimizer, location)
         - The checkpoint file is expected to have keys: 'model_state_dict', 'optimizer_state_dict', and 'epoch'.
         - If there are multiple checkpoint files in the directory, the one with the highest epoch number is loaded.
     """
-    # List all .pkl files in the directory
-    checkpoint_files = [f for f in os.listdir(checkpoint_dir)]
+    checkpoint_candidates = [
+        os.path.join(checkpoint_dir, "latest.pth"),
+        os.path.join(checkpoint_dir, "best.pth"),
+        os.path.join(checkpoint_dir, "latest.pt"),
+        os.path.join(checkpoint_dir, "best.pt"),
+    ]
+    latest_checkpoint_file = next((path for path in checkpoint_candidates if os.path.exists(path)), None)
 
-    # If there are no checkpoint files, return 0 as the starting epoch
-    if not checkpoint_files: return 1
-    else:
-        # Extract the epoch numbers from the file names and find the latest (max)
-        epochs = [int(f.split('.')[1]) for f in checkpoint_files]
-        latest_checkpoint_file = os.path.join(checkpoint_dir, checkpoint_files[epochs.index(max(epochs))])
+    if latest_checkpoint_file is None:
+        return 1
 
-        # Load the checkpoint into the model & optimizer
-        logger.info(f"Loaded Pretrained model from {latest_checkpoint_file} .....")
-        checkpoint_dict = torch.load(latest_checkpoint_file, map_location=location)
-        model.load_state_dict(checkpoint_dict['model_state_dict'], strict=False) # Depend on weight file's key!!
-        optimizer.load_state_dict(checkpoint_dict['optimizer_state_dict'])
-        
-        # Retrun latent epoch
-        return checkpoint_dict['epoch'] + 1
+    logger.info(f"Loaded Pretrained model from {latest_checkpoint_file} .....")
+    checkpoint_dict = torch.load(latest_checkpoint_file, map_location=location)
+
+    model_state = checkpoint_dict.get('model_state_dict') or checkpoint_dict.get('model')
+    optimizer_state = checkpoint_dict.get('optimizer_state_dict') or checkpoint_dict.get('optimizer')
+    if model_state is None:
+        model_state = checkpoint_dict
+
+    model.load_state_dict(model_state, strict=False)
+    if optimizer_state is not None:
+        optimizer.load_state_dict(optimizer_state)
+
+    return checkpoint_dict.get('epoch', 0) + 1 if isinstance(checkpoint_dict, dict) else 1
     
 def save_checkpoint_per_nth(nth, epoch, model, optimizer, train_loss, valid_loss, checkpoint_path, wandb_run):
     """
@@ -100,20 +106,18 @@ def save_checkpoint_per_best(best, valid_loss, train_loss, epoch, model, optimiz
     Returns:
         None
     """
+    latest_path = os.path.join(checkpoint_path, "latest.pth")
+    checkpoint = {
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'train_loss': train_loss,
+        'valid_loss': valid_loss
+    }
+    torch.save(checkpoint, latest_path)
+
     if valid_loss < best:
-        # Save the state of the model and optimizer to a checkpoint file
-        torch.save(
-                    {
-                        'epoch': epoch,
-                        'model_state_dict': model.state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict(),
-                        'train_loss': train_loss,
-                        'valid_loss': valid_loss
-                    },
-                    os.path.join(checkpoint_path, f"epoch.{epoch:04}.pth"))
-        
-        # # Log and save the checkpoint file using wandb
-        # wandb_run.save(os.path.join(checkpoint_path, f"epoch.{epoch:04}.pth"))
+        torch.save(checkpoint, os.path.join(checkpoint_path, "best.pth"))
         best = valid_loss
     return best
 

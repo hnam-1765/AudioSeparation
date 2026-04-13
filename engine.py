@@ -166,18 +166,16 @@ class SeparationEngine:
             )
 
             # Checkpoint
-            ckpt_path = os.path.join(self.log_dir, f"epoch.{epoch:04d}.pt")
             is_best = valid_loss < self.best_loss
             if is_best:
                 self.best_loss = valid_loss
-            save_checkpoint(epoch, self.model, self.optimizer, ckpt_path,
+            latest_ckpt_path = os.path.join(self.log_dir, "latest.pt")
+            save_checkpoint(epoch, self.model, self.optimizer, latest_ckpt_path,
                             best_loss=self.best_loss)
-
-            torch.save(self.model.state_dict(),
-                       os.path.join(self.log_dir, "latest.pt"))
             if is_best:
-                torch.save(self.model.state_dict(),
-                           os.path.join(self.log_dir, "best.pt"))
+                best_ckpt_path = os.path.join(self.log_dir, "best.pt")
+                save_checkpoint(epoch, self.model, self.optimizer, best_ckpt_path,
+                                best_loss=self.best_loss)
 
         print(f"\nTraining done! Best valid loss: {self.best_loss:.4f}")
 

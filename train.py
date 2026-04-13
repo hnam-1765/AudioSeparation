@@ -257,11 +257,11 @@ def train_mossformer2(args):
                 }
             )
 
-        epoch_ckpt_path = paths.checkpoints_dir / f"epoch.{epoch:04d}.pt"
-        save_checkpoint(epoch, model, optimizer, str(epoch_ckpt_path), best_loss=best_val)
-        torch.save(model.state_dict(), paths.checkpoints_dir / "latest.pt")
+        latest_ckpt_path = paths.checkpoints_dir / "latest.pt"
+        save_checkpoint(epoch, model, optimizer, str(latest_ckpt_path), best_loss=best_val)
         if is_best:
-            torch.save(model.state_dict(), paths.checkpoints_dir / "best.pt")
+            best_ckpt_path = paths.checkpoints_dir / "best.pt"
+            save_checkpoint(epoch, model, optimizer, str(best_ckpt_path), best_loss=best_val)
 
     if wandb_run is not None:
         wandb_run.finish()
