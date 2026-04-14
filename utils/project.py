@@ -22,11 +22,13 @@ def resolve_data_root(data_root: Optional[str] = None) -> Path:
     Resolve the dataset root using, in order:
     1. Explicit CLI argument
     2. AUDIO_SEPARATION_DATA_ROOT env var
-    3. ./data/MiniLibriMix if present
+    3. ./data/Libri2Mix (new, large dataset)
+    4. ./data/MiniLibriMix (legacy, small dataset)
     """
     candidates = [
         data_root,
         os.getenv("AUDIO_SEPARATION_DATA_ROOT"),
+        str(PROJECT_ROOT / "data" / "Libri2Mix"),
         str(PROJECT_ROOT / "data" / "MiniLibriMix"),
     ]
     for candidate in candidates:
@@ -36,8 +38,9 @@ def resolve_data_root(data_root: Optional[str] = None) -> Path:
         if resolved.exists():
             return resolved
     raise FileNotFoundError(
-        "MiniLibriMix data root could not be resolved. "
-        "Pass --data_root or set AUDIO_SEPARATION_DATA_ROOT."
+        "Dataset root could not be resolved. "
+        "Pass --data_root or set AUDIO_SEPARATION_DATA_ROOT. "
+        "Expected: data/Libri2Mix/ or data/MiniLibriMix/."
     )
 
 

@@ -9,9 +9,11 @@ from types import SimpleNamespace
 import torch
 from tqdm import tqdm
 
-from datasets.minilibrimix import get_dataloaders
+from datasets.minilibrimix import get_dataloaders as get_minilibrimix_dataloaders
+from datasets.librimix2 import get_dataloaders as get_librimix2_dataloaders, Libri2MixDataset
 from models.mossformer2 import MossFormer2
 from utils.config import apply_sepformer_runtime_overrides, load_yaml_config
+from utils.librimix2_manifests import create_librimix2_scp
 from utils.manifests import create_minilibrimix_scp
 from utils.metrics import pesq, stoi
 from utils.project import PROJECT_ROOT, build_run_paths, resolve_data_root
@@ -115,7 +117,15 @@ def train_mossformer2(args):
     ).to(device)
     print(f"  Model params: {sum(p.numel() for p in model.parameters()):,}")
 
-    train_loader, val_loader = get_dataloaders(
+    # Select the correct dataset loader
+    if getattr(args, "dataset", "minilibrimix") == "librimix2":
+        loader_fn = get_librimix2_dataloaders
+        dataset_note = "Libri2Mix"
+    else:
+        loader_fn = get_minilibrimix_dataloaders
+        dataset_note = "MiniLibriMix"
+
+    train_loader, val_loader = loader_fn(
         root=str(data_root),
         batch_size=args.batch_size,
         num_workers=args.num_workers,
@@ -125,7 +135,7 @@ def train_mossformer2(args):
         val_mix_type=args.mix_type,
         preload=args.preload_audio,
     )
-    print(f"  Train: {len(train_loader)} batches | Val: {len(val_loader)} batches")
+    print(f"  [{dataset_note}] Train: {len(train_loader)} batches | Val: {len(val_loader)} batches")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-2)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -279,13 +289,20 @@ def train_mossformer2(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train SepFormer or MossFormer2 on MiniLibriMix")
+    parser = argparse.ArgumentParser(description="Train SepFormer or MossFormer2 on LibriMix datasets")
     parser.add_argument("--model", type=str, default="mossformer2", choices=["sepformer", "mossformer2"])
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="librimix2",
+        choices=["librimix2", "minilibrimix"],
+        help="Which dataset to use: 'librimix2' (Libri2Mix, large) or 'minilibrimix' (legacy, small).",
+    )
     parser.add_argument(
         "--data_root",
         type=str,
         default=None,
-        help="Path to MiniLibriMix. If omitted, use AUDIO_SEPARATION_DATA_ROOT or ./data/MiniLibriMix.",
+        help="Path to dataset root. If omitted, auto-detects Libri2Mix or MiniLibriMix.",
     )
     parser.add_argument("--artifacts_root", type=str, default=None)
     parser.add_argument("--run_name", type=str, default=None)
@@ -310,7 +327,7 @@ def main():
         type=str,
         default="base",
         choices=["base", "large"],
-        help="Which SepFormer config to use: 'base' (smaller, for MiniLibriMix) or 'large' (original).",
+        help="Which SepFormer config to use: 'base' (smaller) or 'large' (original).",
     )
     args = parser.parse_args()
 
